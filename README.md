@@ -7,3 +7,4 @@ Enter the lab parameters (MDD, OMC, sand bulk density, sand in cone, required co
 - Data is stored on the device (localStorage).
 - Export results as CSV, share them, or print or save them as a PDF.
 - After a change to any cached file, bump `VERSION` in `sw.js` so installed copies update.
+# fdt-calculator
