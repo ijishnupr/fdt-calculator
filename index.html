@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FDT Calculator</title>
+<meta name="description" content="Sand cone field density test calculator — works offline.">
+<meta name="theme-color" content="#1e3a8a" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FDT">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #eef2f7; --panel: #ffffff; --panel-2: #f6f8fb; --text: #0f172a; --muted: #64748b;
+    --line: #dbe2ea; --accent: #1e3a8a; --accent-ink: #ffffff; --accent-soft: #e0e7ff;
+    --pass: #15803d; --pass-soft: #dcfce7; --fail: #b91c1c; --fail-soft: #fee2e2;
+    --warn: #b45309; --shadow: 0 1px 2px rgba(15,23,42,.06), 0 4px 16px rgba(15,23,42,.06);
+    --radius: 16px; --header: #1e3a8a; --header-ink: #fff; color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b1220; --panel: #121a2b; --panel-2: #0f1726; --text: #e5e9f0; --muted: #94a3b8;
+      --line: #23304a; --accent: #6d8cff; --accent-ink: #0b1220; --accent-soft: #1c2748;
+      --pass: #4ade80; --pass-soft: #12321f; --fail: #f87171; --fail-soft: #3a1717;
+      --warn: #fbbf24; --shadow: none; --header: #121a2b; --header-ink: #e5e9f0; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1220; --panel: #121a2b; --panel-2: #0f1726; --text: #e5e9f0; --muted: #94a3b8;
+    --line: #23304a; --accent: #6d8cff; --accent-ink: #0b1220; --accent-soft: #1c2748;
+    --pass: #4ade80; --pass-soft: #12321f; --fail: #f87171; --fail-soft: #3a1717;
+    --warn: #fbbf24; --shadow: none; --header: #121a2b; --header-ink: #e5e9f0; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color: transparent;
+  }
+  button, input, select { font: inherit; color: inherit; }
+
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--header); color: var(--header-ink); border-bottom: 1px solid var(--line);
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  header h1 { font-size: 1.15rem; margin: 0; flex: 1; letter-spacing: .02em; }
+  .status { font-size: .72rem; padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,.18); }
+  .icon-btn {
+    border: 0; background: rgba(255,255,255,.14); color: inherit; width: 40px; height: 40px;
+    border-radius: 12px; display: grid; place-items: center; cursor: pointer;
+  }
+  .icon-btn svg { width: 20px; height: 20px; }
+  .icon-btn[hidden] { display: none; }
+
+  main { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  details.card > summary {
+    list-style: none; cursor: pointer; padding: 14px 16px; display: flex; align-items: center; gap: 8px; font-weight: 600;
+  }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary .hint { font-weight: 400; color: var(--muted); font-size: .85rem; margin-left: auto; text-align: right; }
+  details.card > summary .chev { transition: transform .2s; color: var(--muted); }
+  details[open].card > summary .chev { transform: rotate(90deg); }
+  .card-body { padding: 0 16px 16px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid .full { grid-column: 1 / -1; }
+  [hidden] { display: none !important; }
+  label.field { display: block; font-size: .8rem; color: var(--muted); }
+  label.field span.unit { float: right; opacity: .8; }
+  label.field input { margin-top: 4px; }
+  .field input {
+    width: 100%; min-height: 46px; padding: 10px 12px; font-size: 1rem; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; outline: none;
+  }
+  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .field input:invalid { border-color: var(--fail); }
+
+  .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; text-align: center; box-shadow: var(--shadow); }
+  .stat b { display: block; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .stat small { color: var(--muted); font-size: .75rem; }
+  .stat.pass b { color: var(--pass); } .stat.fail b { color: var(--fail); }
+
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 12px; min-height: 44px;
+    padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: .9rem;
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+  .btn.danger { color: var(--fail); }
+  .btn svg { width: 18px; height: 18px; }
+
+  .list { display: grid; gap: 10px; }
+  .test {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 14px 16px; cursor: pointer;
+    border-left: 5px solid var(--line); text-align: left; width: 100%; font-size: .9rem;
+  }
+  .test.pass { border-left-color: var(--pass); } .test.fail { border-left-color: var(--fail); }
+  .test .title { font-weight: 600; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .test .meta { color: var(--muted); font-size: .8rem; }
+  .test .rc { grid-row: 1 / span 2; grid-column: 2; text-align: right; align-self: center; }
+  .test .rc b { font-size: 1.4rem; font-variant-numeric: tabular-nums; display: block; }
+  .chip { font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; letter-spacing: .04em; }
+  .chip.pass { background: var(--pass-soft); color: var(--pass); }
+  .chip.fail { background: var(--fail-soft); color: var(--fail); }
+  .chip.na { background: var(--panel-2); color: var(--muted); }
+  .kv { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+  .kv b { color: var(--text); font-weight: 600; }
+  .empty { text-align: center; color: var(--muted); padding: 36px 16px; }
+  .empty svg { width: 56px; height: 56px; opacity: .5; }
+
+  .fab {
+    position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 20;
+    border: 0; border-radius: 18px; min-height: 56px; padding: 0 22px; background: var(--accent); color: var(--accent-ink);
+    font-weight: 700; font-size: 1rem; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    box-shadow: 0 8px 24px rgba(30,58,138,.35);
+  }
+  .fab svg { width: 22px; height: 22px; }
+
+  dialog {
+    border: 0; padding: 0; width: 100%; max-width: 640px; max-height: 92dvh; margin: auto auto 0;
+    border-radius: 22px 22px 0 0; background: var(--panel); color: var(--text); overflow: hidden;
+  }
+  dialog::backdrop { background: rgba(2,6,23,.55); }
+  @media (min-width: 700px) { dialog { margin: auto; border-radius: 22px; } }
+  dialog form { display: flex; flex-direction: column; max-height: 92dvh; }
+  .sheet-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .sheet-head h2 { margin: 0; font-size: 1.05rem; flex: 1; }
+  .sheet-head .icon-btn { background: var(--panel-2); color: var(--text); }
+  .sheet-body { overflow-y: auto; padding: 16px; display: grid; gap: 16px; overscroll-behavior: contain; }
+  .sheet-body h3 { margin: 0 0 -4px; font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .preview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--panel-2); border-radius: 14px; padding: 12px; }
+  .preview div { text-align: center; } .preview small { display: block; color: var(--muted); font-size: .7rem; }
+  .preview b { font-variant-numeric: tabular-nums; }
+  .preview .big { grid-column: 1 / -1; display: flex; justify-content: center; align-items: center; gap: 10px; }
+  .preview .big b { font-size: 1.6rem; }
+  .sheet-foot { display: flex; gap: 8px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+  .sheet-foot .btn { flex: 1; justify-content: center; }
+  .sheet-foot .btn.danger { flex: 0 0 auto; }
+  .warn { color: var(--warn); font-size: .8rem; margin: 0; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: .9rem;
+    opacity: 0; pointer-events: none; transition: .25s; z-index: 50; display: flex; gap: 12px; align-items: center; max-width: calc(100% - 32px);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%); pointer-events: auto; }
+  .toast button { background: none; border: 0; color: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+
+  footer { text-align: center; color: var(--muted); font-size: .75rem; padding: 8px 0 0; }
+
+  #printArea { display: none; }
+  @media print {
+    @page { size: A4 landscape; margin: 12mm; }
+    body { background: #fff; color: #000; padding: 0; }
+    header, main, .fab, .toast, dialog { display: none !important; }
+    #printArea { display: block; font-size: 10px; }
+    #printArea h1 { font-size: 16px; margin: 0 0 4px; }
+    #printArea p { margin: 0 0 8px; }
+    #printArea table { width: 100%; border-collapse: collapse; }
+    #printArea th, #printArea td { border: 1px solid #000; padding: 3px 4px; text-align: center; }
+    #printArea th { background: #eee; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FDT Calculator</h1>
+  <span class="status" id="netStatus">Online</span>
+  <button class="icon-btn" id="installBtn" hidden aria-label="Install app" title="Install app">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>
+  </button>
+  <button class="icon-btn" id="themeBtn" aria-label="Toggle theme" title="Toggle theme">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+</header>
+
+<main>
+  <details class="card" id="paramsCard">
+    <summary>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>
+      Project &amp; lab parameters
+      <span class="hint" id="paramsHint"></span>
+    </summary>
+    <div class="card-body grid" id="paramsForm">
+      <label class="field full">Project / site
+        <input id="p_project" type="text" placeholder="e.g. Road A – Sub-base" autocomplete="off">
+      </label>
+      <label class="field">Max dry density <span class="unit">g/cm³</span>
+        <input id="p_mdd" type="number" inputmode="decimal" step="any" min="0">
+      </label>
+      <label class="field">Optimum moisture <span class="unit">%</span>
+        <input id="p_omc" type="number" inputmode="decimal" step="any" min="0">
+      </label>
+      <label class="field">Sand bulk density <span class="unit">g/cm³</span>
+        <input id="p_bdss" type="number" inputmode="decimal" step="any" min="0">
+      </label>
+      <label class="field">Sand in cone <span class="unit">g</span>
+        <input id="p_cone" type="number" inputmode="decimal" step="any" min="0">
+      </label>
+      <label class="field full">Required compaction <span class="unit">%</span>
+        <input id="p_req" type="number" inputmode="decimal" step="any" min="0">
+      </label>
+    </div>
+  </details>
+
+  <section class="summary" aria-label="Summary">
+    <div class="stat"><b id="s_total">0</b><small>Tests</small></div>
+    <div class="stat pass"><b id="s_pass">0</b><small>Pass</small></div>
+    <div class="stat fail"><b id="s_fail">0</b><small>Fail</small></div>
+  </section>
+
+  <div class="toolbar">
+    <button class="btn" id="csvBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>
+      CSV
+    </button>
+    <button class="btn" id="printBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M6 14h12v7H6z"/></svg>
+      Print / PDF
+    </button>
+    <button class="btn" id="shareBtn" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13"/></svg>
+      Share
+    </button>
+    <button class="btn danger" id="clearBtn" style="margin-left:auto">Clear all</button>
+  </div>
+
+  <section class="list" id="list" aria-live="polite"></section>
+
+  <footer>by FN · data is stored on this device only</footer>
+</main>
+
+<button class="fab" id="addBtn">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  Add test
+</button>
+
+<dialog id="sheet">
+  <form method="dialog" id="testForm" novalidate>
+    <div class="sheet-head">
+      <h2 id="sheetTitle">New test</h2>
+      <button type="button" class="icon-btn" id="closeSheet" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <h3>Location</h3>
+      <div class="grid">
+        <label class="field full">Location / chainage
+          <input name="location" type="text" placeholder="e.g. CH 1+250 LHS" autocomplete="off">
+        </label>
+        <label class="field">Date
+          <input name="date" type="date">
+        </label>
+        <label class="field">Layer thickness <span class="unit">mm</span>
+          <input name="thickness" type="number" inputmode="decimal" step="any" min="0">
+        </label>
+      </div>
+
+      <h3>Moisture content</h3>
+      <div class="grid">
+        <label class="field">Container no.
+          <input name="contNo" type="text" autocomplete="off">
+        </label>
+        <label class="field">Container wt <span class="unit">g</span>
+          <input name="contWt" type="number" inputmode="decimal" step="any" min="0">
+        </label>
+        <label class="field">Cont + wet soil <span class="unit">g</span>
+          <input name="wetCont" type="number" inputmode="decimal" step="any" min="0">
+        </label>
+        <label class="field">Cont + dry soil <span class="unit">g</span>
+          <input name="dryCont" type="number" inputmode="decimal" step="any" min="0">
+        </label>
+      </div>
+
+      <h3>Sand cone</h3>
+      <div class="grid">
+        <label class="field">Sand before <span class="unit">g</span>
+          <input name="sandBefore" type="number" inputmode="decimal" step="any" min="0">
+        </label>
+        <label class="field">Sand after <span class="unit">g</span>
+          <input name="sandAfter" type="number" inputmode="decimal" step="any" min="0">
+        </label>
+        <label class="field full">Wet soil from hole <span class="unit">g</span>
+          <input name="wetSoil" type="number" inputmode="decimal" step="any" min="0">
+        </label>
+      </div>
+
+      <div class="preview" id="preview"></div>
+      <p class="warn" id="formWarn" hidden></p>
+    </div>
+    <div class="sheet-foot">
+      <button type="button" class="btn danger" id="deleteBtn" hidden>Delete</button>
+      <button type="button" class="btn" id="cancelBtn">Cancel</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"><span id="toastMsg"></span><button id="toastAction" hidden></button></div>
+<div id="printArea"></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (s) => document.querySelector(s);
+  const KEY = 'fdt:v1';
+  const DEFAULT_PARAMS = { project: '', mdd: 1.88, omc: 11.9, bdss: 1.49, cone: 1670, req: 96 };
+  const FIELDS = ['location', 'date', 'thickness', 'contNo', 'contWt', 'wetCont', 'dryCont', 'sandBefore', 'sandAfter', 'wetSoil'];
+  const TEXT_FIELDS = new Set(['location', 'date', 'contNo']);
+
+  // ---------- storage ----------
+  function load() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(KEY));
+      if (raw && Array.isArray(raw.tests)) return { params: { ...DEFAULT_PARAMS, ...raw.params }, tests: raw.tests, theme: raw.theme || '' };
+    } catch (_) {}
+    return { params: { ...DEFAULT_PARAMS }, tests: [], theme: '' };
+  }
+  let state = load();
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) { toast('Could not save — storage unavailable'); }
+  }
+
+  // ---------- calculations ----------
+  const num = (v) => (v === '' || v == null ? NaN : Number(v));
+  function compute(t, p) {
+    const contWt = num(t.contWt), wet = num(t.wetCont), dry = num(t.dryCont);
+    const before = num(t.sandBefore), after = num(t.sandAfter), soil = num(t.wetSoil);
+    const r = {};
+    if (dry - contWt > 0 && wet >= dry) r.wc = (wet - dry) / (dry - contWt) * 100;
+    const sandHole = before - after - num(p.cone);
+    if (sandHole > 0) { r.sandHole = sandHole; if (num(p.bdss) > 0) r.vol = sandHole / num(p.bdss); }
+    if (r.vol > 0 && soil > 0) r.wetDen = soil / r.vol;
+    if (r.wetDen && r.wc != null) r.dryDen = r.wetDen / (1 + r.wc / 100);
+    if (r.dryDen && num(p.mdd) > 0) r.rc = r.dryDen / num(p.mdd) * 100;
+    if (r.rc != null) r.pass = r.rc >= num(p.req);
+    return r;
+  }
+  const f = (v, d = 1) => (v == null || !isFinite(v) ? '—' : v.toFixed(d));
+
+  // ---------- rendering ----------
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function renderParams() {
+    const p = state.params;
+    $('#p_project').value = p.project;
+    $('#p_mdd').value = p.mdd; $('#p_omc').value = p.omc; $('#p_bdss').value = p.bdss;
+    $('#p_cone').value = p.cone; $('#p_req').value = p.req;
+    updateParamsHint();
+  }
+  function updateParamsHint() {
+    const p = state.params;
+    $('#paramsHint').textContent = `MDD ${p.mdd} · OMC ${p.omc}% · ≥${p.req}%`;
+  }
+
+  function renderList() {
+    const list = $('#list');
+    const p = state.params;
+    let pass = 0, fail = 0;
+    if (!state.tests.length) {
+      list.innerHTML = `<div class="card empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 3h6v5l3 4H6l3-4zM3 16h18M5 16v4h14v-4"/></svg>
+        <p>No tests yet.<br>Tap <b>Add test</b> to enter your first field reading.</p></div>`;
+    } else {
+      list.innerHTML = state.tests.map((t, i) => {
+        const r = compute(t, p);
+        if (r.pass === true) pass++; else if (r.pass === false) fail++;
+        const cls = r.pass === true ? 'pass' : r.pass === false ? 'fail' : '';
+        const chip = r.pass === true ? '<span class="chip pass">PASS</span>' : r.pass === false ? '<span class="chip fail">FAIL</span>' : '<span class="chip na">INCOMPLETE</span>';
+        const wcDiff = r.wc != null ? r.wc - num(p.omc) : null;
+        return `<button class="card test ${cls}" data-i="${i}">
+          <span class="title">#${i + 1} ${esc(t.location) || 'Untitled'}</span>
+          <span class="rc"><b>${f(r.rc)}%</b>${chip}</span>
+          <span class="meta">${esc(t.date)}${t.contNo ? ' · Cont ' + esc(t.contNo) : ''}${t.thickness ? ' · ' + esc(t.thickness) + ' mm' : ''}</span>
+          <span class="kv">
+            <span>WC <b>${f(r.wc)}%</b>${wcDiff != null ? ` (${wcDiff >= 0 ? '+' : ''}${wcDiff.toFixed(1)})` : ''}</span>
+            <span>γd <b>${f(r.dryDen, 3)}</b></span>
+            <span>Vol <b>${f(r.vol, 0)}</b> cm³</span>
+          </span>
+        </button>`;
+      }).join('');
+    }
+    $('#s_total').textContent = state.tests.length;
+    $('#s_pass').textContent = pass;
+    $('#s_fail').textContent = fail;
+  }
+
+  // ---------- params editing ----------
+  const paramMap = { p_project: 'project', p_mdd: 'mdd', p_omc: 'omc', p_bdss: 'bdss', p_cone: 'cone', p_req: 'req' };
+  $('#paramsForm').addEventListener('input', (e) => {
+    const key = paramMap[e.target.id];
+    if (!key) return;
+    state.params[key] = key === 'project' ? e.target.value : e.target.value === '' ? '' : Number(e.target.value);
+    save(); updateParamsHint(); renderList();
+  });
+  if (!state.tests.length) $('#paramsCard').open = true;
+
+  // ---------- test sheet ----------
+  const sheet = $('#sheet'), form = $('#testForm');
+  let editing = -1;
+
+  function readForm() {
+    const t = {};
+    for (const k of FIELDS) {
+      const v = form.elements[k].value.trim();
+      t[k] = TEXT_FIELDS.has(k) ? v : v === '' ? '' : Number(v);
+    }
+    return t;
+  }
+  function updatePreview() {
+    const r = compute(readForm(), state.params);
+    const chip = r.pass === true ? '<span class="chip pass">PASS</span>' : r.pass === false ? '<span class="chip fail">FAIL</span>' : '<span class="chip na">—</span>';
+    $('#preview').innerHTML = `
+      <div class="big"><small>Relative compaction</small><b>${f(r.rc)}%</b>${chip}</div>
+      <div><small>Moisture</small><b>${f(r.wc)}%</b></div>
+      <div><small>Vol hole cm³</small><b>${f(r.vol, 0)}</b></div>
+      <div><small>Dry dens g/cm³</small><b>${f(r.dryDen, 3)}</b></div>`;
+    const t = readForm(), warn = [];
+    if (t.dryCont !== '' && t.wetCont !== '' && t.dryCont > t.wetCont) warn.push('Dry weight is greater than wet weight.');
+    if (t.sandBefore !== '' && t.sandAfter !== '' && !(r.sandHole > 0)) warn.push('Sand used is less than the cone mass — check sand weights.');
+    $('#formWarn').hidden = !warn.length;
+    $('#formWarn').textContent = warn.join(' ');
+  }
+  function openSheet(i = -1) {
+    editing = i;
+    const last = state.tests[state.tests.length - 1];
+    const t = i >= 0 ? state.tests[i] : { date: new Date().toISOString().slice(0, 10), thickness: last?.thickness ?? 150, sandBefore: last?.sandBefore ?? '' };
+    for (const k of FIELDS) form.elements[k].value = t[k] ?? '';
+    $('#sheetTitle').textContent = i >= 0 ? `Edit test #${i + 1}` : 'New test';
+    $('#deleteBtn').hidden = i < 0;
+    updatePreview();
+    sheet.showModal();
+    sheet.querySelector('.sheet-body').scrollTop = 0;
+  }
+  form.addEventListener('input', updatePreview);
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const t = readForm();
+    if (editing >= 0) state.tests[editing] = { ...state.tests[editing], ...t };
+    else state.tests.push({ id: Date.now().toString(36), ...t });
+    save(); renderList(); sheet.close();
+    toast(editing >= 0 ? 'Test updated' : 'Test saved');
+  });
+  $('#closeSheet').onclick = $('#cancelBtn').onclick = () => sheet.close();
+  sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.close(); });
+  $('#deleteBtn').onclick = () => {
+    const removed = state.tests.splice(editing, 1)[0], at = editing;
+    save(); renderList(); sheet.close();
+    toast('Test deleted', 'Undo', () => { state.tests.splice(at, 0, removed); save(); renderList(); });
+  };
+  $('#addBtn').onclick = () => openSheet();
+  $('#list').addEventListener('click', (e) => {
+    const b = e.target.closest('.test');
+    if (b) openSheet(Number(b.dataset.i));
+  });
+  $('#clearBtn').onclick = () => {
+    if (!state.tests.length) return;
+    if (!confirm('Delete all tests? Parameters will be kept.')) return;
+    const backup = state.tests; state.tests = []; save(); renderList();
+    toast('All tests cleared', 'Undo', () => { state.tests = backup; save(); renderList(); });
+  };
+
+  // ---------- export ----------
+  const COLS = [
+    ['#', (t, r, i) => i + 1], ['Location', (t) => t.location], ['Date', (t) => t.date], ['Thickness (mm)', (t) => t.thickness],
+    ['Container', (t) => t.contNo], ['Cont Wt (g)', (t) => t.contWt], ['Cont+Wet (g)', (t) => t.wetCont], ['Cont+Dry (g)', (t) => t.dryCont],
+    ['WC (%)', (t, r) => f(r.wc)], ['Sand Before (g)', (t) => t.sandBefore], ['Sand After (g)', (t) => t.sandAfter],
+    ['Sand in Hole (g)', (t, r) => f(r.sandHole, 0)], ['Vol Hole (cm³)', (t, r) => f(r.vol, 0)], ['Wet Soil (g)', (t) => t.wetSoil],
+    ['Wet Dens (g/cm³)', (t, r) => f(r.wetDen, 3)], ['Dry Dens (g/cm³)', (t, r) => f(r.dryDen, 3)], ['RC (%)', (t, r) => f(r.rc)],
+    ['Result', (t, r) => (r.pass === true ? 'PASS' : r.pass === false ? 'FAIL' : '')],
+  ];
+  const rows = () => state.tests.map((t, i) => { const r = compute(t, state.params); return COLS.map(([, fn]) => fn(t, r, i) ?? ''); });
+  function csvText() {
+    const p = state.params, q = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const head = [['Project', p.project], ['MDD (g/cm³)', p.mdd], ['OMC (%)', p.omc], ['Sand BD (g/cm³)', p.bdss], ['Sand in cone (g)', p.cone], ['Required (%)', p.req], []];
+    return '﻿' + [...head, COLS.map((c) => c[0]), ...rows()].map((r) => r.map(q).join(',')).join('\r\n');
+  }
+  const fileName = () => `FDT_${(state.params.project || 'report').replace(/[^\w-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+  $('#csvBtn').onclick = () => {
+    if (!state.tests.length) return toast('Nothing to export yet');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csvText()], { type: 'text/csv' }));
+    a.download = fileName(); a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  if (navigator.canShare && navigator.canShare({ files: [new File([''], 'x.csv', { type: 'text/csv' })] })) {
+    $('#shareBtn').hidden = false;
+    $('#shareBtn').onclick = async () => {
+      if (!state.tests.length) return toast('Nothing to share yet');
+      try { await navigator.share({ files: [new File([csvText()], fileName(), { type: 'text/csv' })], title: 'FDT report' }); } catch (_) {}
+    };
+  }
+  $('#printBtn').onclick = () => {
+    if (!state.tests.length) return toast('Nothing to print yet');
+    const p = state.params;
+    $('#printArea').innerHTML = `<h1>Field Density Test (Sand Cone) — ${esc(p.project)}</h1>
+      <p>MDD ${esc(p.mdd)} g/cm³ · OMC ${esc(p.omc)}% · Sand bulk density ${esc(p.bdss)} g/cm³ · Sand in cone ${esc(p.cone)} g · Required compaction ${esc(p.req)}%</p>
+      <table><thead><tr>${COLS.map((c) => `<th>${esc(c[0])}</th>`).join('')}</tr></thead>
+      <tbody>${rows().map((r) => `<tr>${r.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    window.print();
+  };
+
+  // ---------- theme ----------
+  function applyTheme() {
+    if (state.theme) document.documentElement.dataset.theme = state.theme;
+    else delete document.documentElement.dataset.theme;
+  }
+  $('#themeBtn').onclick = () => {
+    const dark = state.theme ? state.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    state.theme = dark ? 'light' : 'dark';
+    applyTheme(); save();
+  };
+
+  // ---------- toast ----------
+  let toastTimer;
+  function toast(msg, action, fn) {
+    const el = $('#toast'), btn = $('#toastAction');
+    $('#toastMsg').textContent = msg;
+    btn.hidden = !action; btn.textContent = action || '';
+    btn.onclick = () => { fn && fn(); el.classList.remove('show'); };
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), action ? 6000 : 2200);
+  }
+
+  // ---------- online status ----------
+  function netStatus() { $('#netStatus').textContent = navigator.onLine ? 'Online' : 'Offline'; }
+  addEventListener('online', netStatus); addEventListener('offline', netStatus);
+
+  // ---------- install + service worker ----------
+  let deferredPrompt;
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; $('#installBtn').hidden = false; });
+  $('#installBtn').onclick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null; $('#installBtn').hidden = true;
+  };
+  addEventListener('appinstalled', () => { $('#installBtn').hidden = true; toast('App installed'); });
+
+  if ('serviceWorker' in navigator) {
+    addEventListener('load', async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('./sw.js');
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          nw && nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller)
+              toast('Update available', 'Reload', () => nw.postMessage('skipWaiting'));
+          });
+        });
+        let reloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+      } catch (_) {}
+    });
+  }
+
+  applyTheme(); netStatus(); renderParams(); renderList();
+})();
+</script>
+</body>
+</html>
